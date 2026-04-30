@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title> Laboratorio de Auditoría de Código Seguro</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Laboratorio de Auditoría de Código Seguro</h1>
+    
+    <div class="alert alert-info">
+      ⚠️ Vulnerabilidades Intencionales
+    </div>
+
+    <h2>📝 Login</h2>
+    <div class="form-group">
+      <input type="text" id="username" placeholder="Usuario" autocomplete="off">
+      <input type="password" id="password" placeholder="Contraseña">
+      <button onclick="login()">Iniciar Sesión</button>
+    </div>
+
+    <h2>👥 Gestión de Usuarios</h2>
+    <div class="button-group">
+      <button onclick="getUsers()">Ver Usuarios</button>
+      <button onclick="saveUser()">Guardar Usuario</button>
+    </div>
+
+    <h2>🔍 Resultados</h2>
+    <div id="output"></div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

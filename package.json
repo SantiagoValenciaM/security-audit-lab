@@ -1,0 +1,17 @@
+{
+  "name": "secure-audit-lab",
+  "version": "1.0.0",
+  "description": "Laboratorio educativo de auditoría de seguridad de código con vulnerabilidades intencionales",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "body-parser": "^1.20.2"
+  },
+  "keywords": ["security", "audit", "education"],
+  "author": "Security Lab",
+  "license": "MIT"
+}
