@@ -35,52 +35,92 @@ jobs:
           npx eslint . --format json --output-file eslint-report.json --ext .js,.jsx || true
           test -f eslint-report.json || echo '[]' > eslint-report.json
 
+      - name: Debug - List vulnerability files
+        run: |
+          echo "=== Looking for vulnerability files ==="
+          ls -la *.json 2>/dev/null || echo "No JSON files found"
+          cat sonarqube-vulnerabilities.json | head -c 500 || echo "File not found"
+
       - name: Convert custom vulnerabilities to SARIF
         run: |
-          node -e '
-          const fs = require("fs");
-          
-          // Leer vulnerabilidades
-          const vulnData = JSON.parse(fs.readFileSync("vulnerabilities.json", "utf8"));
-          
-          // Crear SARIF
-          const sarif = {
-            version: "2.1.0",
-            runs: [{
-              tool: { driver: { 
-                name: "Custom Security Scanner",
-                rules: vulnData.vulnerabilities.map(v => ({
-                  id: v.id,
-                  shortDescription: { text: v.type },
-                  fullDescription: { text: v.description },
-                  properties: { cwe: v.cwe }
-                }))
-              }},
-              results: vulnData.vulnerabilities.map(v => ({
-                ruleId: v.id,
-                level: v.severity === "CRITICAL" ? "error" : (v.severity === "HIGH" ? "error" : "warning"),
-                message: { text: `${v.description} - Remediation: ${v.remediation}` },
-                locations: [{
-                  physicalLocation: {
-                    artifactLocation: { uri: v.file },
-                    region: { startLine: v.line }
+          if [ -f sonarqube-vulnerabilities.json ]; then
+            echo "✅ Found sonarqube-vulnerabilities.json"
+            node -e '
+            const fs = require("fs");
+            
+            const vulnData = JSON.parse(fs.readFileSync("sonarqube-vulnerabilities.json", "utf8"));
+            
+            if (!vulnData.vulnerabilities || vulnData.vulnerabilities.length === 0) {
+              console.log("⚠️ No vulnerabilities found");
+              fs.writeFileSync("security-report.sarif", JSON.stringify({version:"2.1.0",runs:[]}, null, 2));
+              process.exit(0);
+            }
+            
+            const sarif = {
+              version: "2.1.0",
+              runs: [{
+                tool: {
+                  driver: {
+                    name: "Custom Security Analyzer",
+                    rules: vulnData.vulnerabilities.map(v => ({
+                      id: v.id,
+                      shortDescription: { text: v.type },
+                      fullDescription: { text: v.description },
+                      properties: { cwe: v.cwe }
+                    }))
                   }
-                }]
-              }))
-            }]
-          };
-          
-          fs.writeFileSync("security-report.sarif", JSON.stringify(sarif, null, 2));
-          console.log("✅ SARIF report created");
-          '
+                },
+                results: vulnData.vulnerabilities.map(v => ({
+                  ruleId: v.id,
+                  level: v.severity === "CRITICAL" ? "error" : (v.severity === "HIGH" ? "error" : "warning"),
+                  message: { text: `${v.description}\nCWE: ${v.cwe}\nRemediation: ${v.remediation}` },
+                  locations: [{
+                    physicalLocation: {
+                      artifactLocation: { uri: v.file },
+                      region: { startLine: v.line }
+                    }
+                  }],
+                  codeFlows: [{
+                    threadFlows: [{
+                      locations: [{
+                        location: {
+                          message: { text: v.code },
+                          physicalLocation: {
+                            artifactLocation: { uri: v.file },
+                            region: { startLine: v.line }
+                          }
+                        }
+                      }]
+                    }]
+                  }]
+                }))
+              }]
+            };
+            
+            fs.writeFileSync("security-report.sarif", JSON.stringify(sarif, null, 2));
+            console.log(`✅ SARIF report created with ${vulnData.vulnerabilities.length} vulnerabilities`);
+            '
+          else
+            echo "⚠️ sonarqube-vulnerabilities.json not found"
+            echo '{"version":"2.1.0","runs":[]}' > security-report.sarif
+          fi
 
-      - name: Run custom vulnerability analysis
-        continue-on-error: true
-        run: npm run analyze-vuln || true
+      - name: Verify SARIF report
+        run: |
+          if [ -f security-report.sarif ]; then
+            echo "✅ security-report.sarif created"
+            ls -la security-report.sarif
+            cat security-report.sarif | head -c 300
+          else
+            echo "❌ security-report.sarif not created"
+            exit 1
+          fi
 
-      - name: Run full security check
+      - name: Run security checks
         continue-on-error: true
-        run: npm run security || true
+        run: |
+          npm run analyze-vuln || true
+          npm run security || true
 
       - name: SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@v2.2.0
