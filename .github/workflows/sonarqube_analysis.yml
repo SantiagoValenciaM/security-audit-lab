@@ -32,10 +32,8 @@ jobs:
       - name: Run ESLint and convert to SonarQube format
         continue-on-error: true
         run: |
-          # Generar raw ESLint output
           npx eslint . --format json --output-file eslint-raw.json --ext .js,.jsx,.ts,.tsx 2>/dev/null || true
           
-          # Convertir a formato SonarQube
           if [ -f eslint-raw.json ] && [ -s eslint-raw.json ]; then
             node -e '
             const fs = require("fs");
@@ -59,9 +57,7 @@ jobs:
                         filePath: filePath,
                         textRange: {
                           startLine: msg.line || 1,
-                          startColumn: msg.column || 1,
-                          endLine: msg.endLine || msg.line || 1,
-                          endColumn: msg.endColumn || msg.column || 1
+                          endLine: msg.endLine || msg.line || 1
                         },
                         message: msg.message
                       }
@@ -70,20 +66,18 @@ jobs:
                 });
               });
               
-              const sonarReport = { issues: sonarIssues };
-              fs.writeFileSync("eslint-report.json", JSON.stringify(sonarReport, null, 2));
+              fs.writeFileSync("eslint-report.json", JSON.stringify({ issues: sonarIssues }, null, 2));
               console.log(`✅ Converted ${sonarIssues.length} ESLint issues`);
             } catch (error) {
-              console.log("Error converting ESLint report:", error.message);
+              console.log("Error:", error.message);
               fs.writeFileSync("eslint-report.json", JSON.stringify({ issues: [] }, null, 2));
             }
             '
           else
             echo '{"issues":[]}' > eslint-report.json
-            echo "No ESLint issues found, created empty report"
           fi
 
-      - name: Convert custom vulnerabilities to SARIF
+      - name: Convert custom vulnerabilities to Generic SonarQube format
         run: |
           if [ -f sonarqube-vulnerabilities.json ]; then
             node -e '
@@ -93,64 +87,65 @@ jobs:
               const vulnData = JSON.parse(fs.readFileSync("sonarqube-vulnerabilities.json", "utf8"));
               
               if (!vulnData.vulnerabilities || vulnData.vulnerabilities.length === 0) {
-                console.log("⚠️ No vulnerabilities found");
-                fs.writeFileSync("security-report.sarif", JSON.stringify({version:"2.1.0",runs:[]}, null, 2));
+                console.log("No vulnerabilities found");
+                fs.writeFileSync("vulnerabilities-report.json", JSON.stringify({ issues: [] }, null, 2));
                 process.exit(0);
               }
               
-              const sarif = {
-                version: "2.1.0",
-                runs: [{
-                  tool: {
-                    driver: {
-                      name: "Custom Security Scanner",
-                      rules: vulnData.vulnerabilities.map(v => ({
-                        id: v.id,
-                        shortDescription: { text: v.type },
-                        fullDescription: { text: v.description },
-                        properties: { cwe: v.cwe }
-                      }))
-                    }
-                  },
-                  results: vulnData.vulnerabilities.map(v => ({
-                    ruleId: v.id,
-                    level: v.severity === "CRITICAL" ? "error" : (v.severity === "HIGH" ? "error" : "warning"),
-                    message: { text: `${v.description}\nCWE: ${v.cwe}\nRemediation: ${v.remediation}` },
-                    locations: [{
-                      physicalLocation: {
-                        artifactLocation: { uri: v.file },
-                        region: { startLine: v.line }
-                      }
-                    }]
-                  }))
-                }]
-              };
+              const issues = vulnData.vulnerabilities.map(v => {
+                // Mapear severidad
+                let severity = "MAJOR";
+                if (v.severity === "CRITICAL") severity = "BLOCKER";
+                else if (v.severity === "HIGH") severity = "CRITICAL";
+                else if (v.severity === "MEDIUM") severity = "MAJOR";
+                else severity = "MINOR";
+                
+                return {
+                  engineId: "security-audit",
+                  ruleId: v.id,
+                  severity: severity,
+                  type: "VULNERABILITY",
+                  primaryLocation: {
+                    filePath: v.file,
+                    textRange: {
+                      startLine: v.line,
+                      endLine: v.line
+                    },
+                    message: `${v.type}: ${v.description}\nCWE: ${v.cwe}\nRemediation: ${v.remediation}\nCode: ${v.code}`
+                  }
+                };
+              });
               
-              fs.writeFileSync("security-report.sarif", JSON.stringify(sarif, null, 2));
-              console.log(`✅ SARIF report created with ${vulnData.vulnerabilities.length} vulnerabilities`);
+              const report = { issues: issues };
+              fs.writeFileSync("vulnerabilities-report.json", JSON.stringify(report, null, 2));
+              console.log(`✅ Converted ${issues.length} vulnerabilities to SonarQube format`);
             } catch (error) {
               console.error("Error:", error.message);
-              fs.writeFileSync("security-report.sarif", JSON.stringify({version:"2.1.0",runs:[]}, null, 2));
+              fs.writeFileSync("vulnerabilities-report.json", JSON.stringify({ issues: [] }, null, 2));
             }
             '
           else
-            echo '{"version":"2.1.0","runs":[]}' > security-report.sarif
+            echo '{"issues":[]}' > vulnerabilities-report.json
             echo "No vulnerabilities file found"
           fi
 
       - name: Debug - Verify report files
         run: |
-          echo "=== ESLint Report ==="
-          head -c 300 eslint-report.json
-          echo -e "\n=== SARIF Report ==="
-          head -c 300 security-report.sarif
-          echo -e "\n=== Validating formats ==="
-          if grep -q '^{' eslint-report.json; then
-            echo "✅ eslint-report.json starts with {"
-          else
-            echo "❌ eslint-report.json format error"
-            cat eslint-report.json
-          fi
+          echo "=== eslint-report.json ==="
+          head -c 500 eslint-report.json
+          echo -e "\n=== vulnerabilities-report.json ==="
+          head -c 500 vulnerabilities-report.json
+          echo -e "\n=== Validating JSON format ==="
+          for file in eslint-report.json vulnerabilities-report.json; do
+            if jq empty "$file" 2>/dev/null; then
+              echo "✅ $file is valid JSON"
+              ISSUES=$(jq '.issues | length' "$file")
+              echo "   Contains $ISSUES issues"
+            else
+              echo "❌ $file has invalid JSON"
+              cat "$file"
+            fi
+          done
 
       - name: Run security checks
         continue-on-error: true
@@ -165,4 +160,4 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           args: >
-            -Dsonar.externalIssuesReportPaths=eslint-report.json,security-report.sarif
+            -Dsonar.externalIssuesReportPaths=eslint-report.json,vulnerabilities-report.json
