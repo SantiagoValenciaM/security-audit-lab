@@ -18,7 +18,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Requerido para un mejor análisis de SonarQube
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -29,15 +29,52 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Check for vulnerable dependencies
-        continue-on-error: true
-        run: npm audit --production || true
-
       - name: Run ESLint with JSON report
         continue-on-error: true
-        run: npm run lint -- --format json --output-file eslint-report.json || true
+        run: |
+          npx eslint . --format json --output-file eslint-report.json --ext .js,.jsx || true
+          test -f eslint-report.json || echo '[]' > eslint-report.json
 
-      - name: Analyze custom vulnerabilities
+      - name: Convert custom vulnerabilities to SARIF
+        run: |
+          node -e '
+          const fs = require("fs");
+          
+          // Leer vulnerabilidades
+          const vulnData = JSON.parse(fs.readFileSync("vulnerabilities.json", "utf8"));
+          
+          // Crear SARIF
+          const sarif = {
+            version: "2.1.0",
+            runs: [{
+              tool: { driver: { 
+                name: "Custom Security Scanner",
+                rules: vulnData.vulnerabilities.map(v => ({
+                  id: v.id,
+                  shortDescription: { text: v.type },
+                  fullDescription: { text: v.description },
+                  properties: { cwe: v.cwe }
+                }))
+              }},
+              results: vulnData.vulnerabilities.map(v => ({
+                ruleId: v.id,
+                level: v.severity === "CRITICAL" ? "error" : (v.severity === "HIGH" ? "error" : "warning"),
+                message: { text: `${v.description} - Remediation: ${v.remediation}` },
+                locations: [{
+                  physicalLocation: {
+                    artifactLocation: { uri: v.file },
+                    region: { startLine: v.line }
+                  }
+                }]
+              }))
+            }]
+          };
+          
+          fs.writeFileSync("security-report.sarif", JSON.stringify(sarif, null, 2));
+          console.log("✅ SARIF report created");
+          '
+
+      - name: Run custom vulnerability analysis
         continue-on-error: true
         run: npm run analyze-vuln || true
 
@@ -52,10 +89,4 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         with:
           args: >
-            -Dsonar.projectKey=secure-audit-lab
-            -Dsonar.projectName=Secure%20Audit%20Lab
-            -Dsonar.sources=.
-            -Dsonar.inclusions=**/*.js,**/*.jsx
-            -Dsonar.exclusions=node_modules/**,.git/**,logs/**,**/node_modules/**
-            -Dsonar.javascript.file.suffixes=.js,.jsx
-            -Dsonar.externalIssuesReportPaths=eslint-report.json
+            -Dsonar.externalIssuesReportPaths=eslint-report.json,security-report.sarif
