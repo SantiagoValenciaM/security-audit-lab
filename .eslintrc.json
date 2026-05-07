@@ -1,0 +1,77 @@
+{
+  "parserOptions": {
+    "ecmaVersion": 2021,
+    "sourceType": "module",
+    "ecmaFeatures": {
+      "jsx": true
+    }
+  },
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2021": true
+  },
+  "extends": ["eslint:recommended", "plugin:security/recommended"],
+  "plugins": ["security"],
+  "rules": {
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-new-func": "error",
+    "no-script-url": "error",
+    "no-with": "error",
+    "no-var": "warn",
+    "prefer-const": "warn",
+    "eqeqeq": ["error", "always"],
+    "no-compare-neg-zero": "error",
+    "no-cond-assign": "error",
+    "no-constant-condition": "error",
+    "no-debugger": "warn",
+    "no-dupe-args": "error",
+    "no-dupe-keys": "error",
+    "no-duplicate-case": "error",
+    "no-empty": "warn",
+    "no-ex-assign": "error",
+    "no-extra-boolean-cast": "warn",
+    "no-extra-semi": "warn",
+    "no-fallthrough": "error",
+    "no-func-assign": "error",
+    "no-global-assign": "error",
+    "no-import-assign": "error",
+    "no-inner-declarations": "warn",
+    "no-invalid-regexp": "error",
+    "no-irregular-whitespace": "error",
+    "no-mixed-spaces-and-tabs": "warn",
+    "no-obj-calls": "error",
+    "no-octal": "error",
+    "no-redeclare": "error",
+    "no-regex-spaces": "warn",
+    "no-setter-return": "error",
+    "no-sparse-arrays": "warn",
+    "no-undef": "error",
+    "no-unreachable": "error",
+    "no-unsafe-finally": "error",
+    "no-unsafe-negation": "error",
+    "require-yield": "error",
+    "use-isnan": "error",
+    "valid-typeof": "error",
+    "no-unmodified-loop-condition": "warn",
+    "no-console": "warn",
+    "camelcase": "warn",
+    "no-multi-spaces": "warn",
+    "semi": ["warn", "always"],
+    "quotes": ["warn", "single"],
+    "indent": ["warn", 4],
+    "comma-dangle": ["warn", "never"],
+    "no-trailing-spaces": "warn",
+    "dot-notation": "warn",
+    "no-else-return": "warn"
+  },
+  "overrides": [
+    {
+      "files": ["*.html"],
+      "rules": {
+        "no-undef": "off"
+      }
+    }
+  ]
+}

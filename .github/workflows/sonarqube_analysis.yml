@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4.1.7
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Requerido para un mejor análisis de SonarQube
 
@@ -29,6 +29,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Check for vulnerable dependencies
+        continue-on-error: true
+        run: npm audit --production || true
+
+      - name: Run ESLint with Security Plugin
+        continue-on-error: true
+        run: npm run lint || true
+
+      - name: Run full security check
+        continue-on-error: true
+        run: npm run security || true
+
       - name: SonarQube Scan
         uses: sonarsource/sonarqube-scan-action@v2.2.0
         env:
@@ -38,3 +50,7 @@ jobs:
           args: >
             -Dsonar.projectKey=secure-audit-lab
             -Dsonar.projectName=Secure%20Audit%20Lab
+            -Dsonar.exclusions=node_modules/**,.git/**
+            -Dsonar.sources=.
+            -Dsonar.inclusions=server.js,public/**/*.js
+            -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
