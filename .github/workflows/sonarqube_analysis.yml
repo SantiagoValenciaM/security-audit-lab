@@ -1,7 +1,11 @@
 name: SonarQube Analysis
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'   # ✅ Era '20'
+          cache: 'npm'
 
 on:
   push:
