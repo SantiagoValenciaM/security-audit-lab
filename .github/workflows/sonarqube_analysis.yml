@@ -1,12 +1,5 @@
 name: SonarQube Analysis
 
-env:
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'   # ✅ Era '20'
-          cache: 'npm'
-
 on:
   push:
     branches:
@@ -27,7 +20,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install dependencies
@@ -95,72 +88,3 @@ jobs:
                 fs.writeFileSync("vulnerabilities-report.json", JSON.stringify({ issues: [] }, null, 2));
                 process.exit(0);
               }
-              
-              const issues = vulnData.vulnerabilities.map(v => {
-                let severity = "MAJOR";
-                if (v.severity === "CRITICAL") severity = "BLOCKER";
-                else if (v.severity === "HIGH") severity = "CRITICAL";
-                else if (v.severity === "MEDIUM") severity = "MAJOR";
-                else severity = "MINOR";
-                
-                return {
-                  engineId: "security-audit",
-                  ruleId: v.id,
-                  severity: severity,
-                  type: "VULNERABILITY",
-                  primaryLocation: {
-                    filePath: v.file,
-                    textRange: {
-                      startLine: v.line,
-                      endLine: v.line
-                    },
-                    message: `${v.type}: ${v.description}\nCWE: ${v.cwe}\nRemediation: ${v.remediation}\nCode: ${v.code}`
-                  }
-                };
-              });
-              
-              const report = { issues: issues };
-              fs.writeFileSync("vulnerabilities-report.json", JSON.stringify(report, null, 2));
-              console.log(`✅ Converted ${issues.length} vulnerabilities to SonarQube format`);
-            } catch (error) {
-              console.error("Error:", error.message);
-              fs.writeFileSync("vulnerabilities-report.json", JSON.stringify({ issues: [] }, null, 2));
-            }
-            '
-          else
-            echo '{"issues":[]}' > vulnerabilities-report.json
-            echo "No vulnerabilities file found"
-          fi
-
-      - name: Debug - Verify report files
-        run: |
-          echo "=== eslint-report.json ==="
-          head -c 500 eslint-report.json
-          echo -e "\n=== vulnerabilities-report.json ==="
-          head -c 500 vulnerabilities-report.json
-          echo -e "\n=== Validating JSON format ==="
-          for file in eslint-report.json vulnerabilities-report.json; do
-            if jq empty "$file" 2>/dev/null; then
-              echo "✅ $file is valid JSON"
-              ISSUES=$(jq '.issues | length' "$file")
-              echo "   Contains $ISSUES issues"
-            else
-              echo "❌ $file has invalid JSON"
-              cat "$file"
-            fi
-          done
-
-      - name: Run security checks
-        continue-on-error: true
-        run: |
-          npm run analyze-vuln || true
-          npm run security || true
-
-      - name: SonarQube Scan
-        uses: sonarsource/sonarqube-scan-action@v2.2.0
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        with:
-          args: >
-            -Dsonar.externalIssuesReportPaths=eslint-report.json,vulnerabilities-report.json
